@@ -1,0 +1,448 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  Moon,
+  Clock,
+  BarChart3,
+  Home,
+  User,
+  Bell,
+  X,
+  Sparkles,
+} from 'lucide-react';
+import {
+  INITIAL_WEEKLY_DATA,
+  DayRecoveryRecord,
+  Handedness,
+  formatMinutesToTime,
+  parseTimeToMinutes,
+} from './utils/r90Engine';
+import {
+  BUILTIN_MELODIES,
+  INITIAL_SMARTHOME_DEVICES,
+  INITIAL_WEARABLES,
+  MelodyTrack,
+  SmartHomeDevice,
+  WearableDevice,
+  FadeCurveType,
+  sleepCoachMedia,
+} from './utils/sleepCoachEngine';
+import { ScreenToday } from './components/ScreenToday';
+import { ScreenSchedule } from './components/ScreenSchedule';
+import { ScreenAnalytics } from './components/ScreenAnalytics';
+import { ScreenSmartHome } from './components/ScreenSmartHome';
+import { OnboardingModal } from './components/OnboardingModal';
+import { ProfileSettingsSheet } from './components/ProfileSettingsSheet';
+import { OfflineIndicator } from './components/PWAInstallButton';
+
+type MainTab = 'today' | 'schedule' | 'analytics' | 'smarthome';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<MainTab>('today');
+
+  // Core Schedule State (DataStore persistence)
+  const [wakeTime, setWakeTime] = useState<string>(() => {
+    return localStorage.getItem('sc_wake_time') || '06:30';
+  });
+  const [targetCycles, setTargetCycles] = useState<number>(() => {
+    const saved = localStorage.getItem('sc_target_cycles');
+    return saved ? Number(saved) : 5;
+  });
+  const [shiftMinutesStep, setShiftMinutesStep] = useState<number>(15);
+  const [shiftDaysInterval, setShiftDaysInterval] = useState<number>(3);
+  const [alarmWindowMins, setAlarmWindowMins] = useState<number>(20);
+  const [fadeCurve, setFadeCurve] = useState<FadeCurveType>('sigmoid');
+  const [windDownLeadMins, setWindDownLeadMins] = useState<30 | 60>(60);
+  const [dndEnabled, setDndEnabled] = useState<boolean>(true);
+
+  // Melody Library State
+  const [melodies, setMelodies] = useState<MelodyTrack[]>(BUILTIN_MELODIES);
+  const [sleepMelodyId, setSleepMelodyId] = useState<string>('nature_rain');
+  const [wakeMelodyId, setWakeMelodyId] = useState<string>('tone_432');
+
+  // Smart Home & Wearables State
+  const [smartDevices, setSmartDevices] = useState<SmartHomeDevice[]>(
+    INITIAL_SMARTHOME_DEVICES
+  );
+  const [wearables, setWearables] = useState<WearableDevice[]>(INITIAL_WEARABLES);
+  const [googleHomeAuthorized, setGoogleHomeAuthorized] = useState<boolean>(true);
+  const [activeSceneMessage, setActiveSceneMessage] = useState<string | null>(null);
+
+  // Weekly R90 & Analytics State
+  const [weeklyData, setWeeklyData] = useState<DayRecoveryRecord[]>(() => {
+    const saved = localStorage.getItem('r90_weekly_data');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return INITIAL_WEEKLY_DATA;
+      }
+    }
+    return INITIAL_WEEKLY_DATA;
+  });
+
+  // Accessibility & Profile State
+  const [amberNightFilter, setAmberNightFilter] = useState<boolean>(false);
+  const [largeFontScale, setLargeFontScale] = useState<boolean>(false);
+  const [handedness, setHandedness] = useState<Handedness>('right');
+  const [showProfileSheet, setShowProfileSheet] = useState<boolean>(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+
+  // In-app reminder toast state
+  const [toastAlert, setToastAlert] = useState<{ title: string; desc: string } | null>(
+    null
+  );
+  const [nowTimeStr, setNowTimeStr] = useState<string>('21:45');
+
+  useEffect(() => {
+    localStorage.setItem('sc_wake_time', wakeTime);
+  }, [wakeTime]);
+
+  useEffect(() => {
+    localStorage.setItem('sc_target_cycles', String(targetCycles));
+  }, [targetCycles]);
+
+  useEffect(() => {
+    localStorage.setItem('r90_weekly_data', JSON.stringify(weeklyData));
+  }, [weeklyData]);
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      setNowTimeStr(`${hh}:${mm}`);
+    };
+    updateClock();
+    const t = setInterval(updateClock, 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  const wakeMins = parseTimeToMinutes(wakeTime);
+  const bedTime = formatMinutesToTime(wakeMins - targetCycles * 90);
+
+  const sleepMelody =
+    melodies.find((m) => m.id === sleepMelodyId) || melodies[0];
+  const wakeMelody =
+    melodies.find((m) => m.id === wakeMelodyId) || melodies[3];
+
+  const handleTriggerSmartScene = (scene: 'bedtime' | 'morning') => {
+    if (scene === 'bedtime') {
+      setActiveSceneMessage(
+        'Сцена Google Home «Відбій» активована: Світло 8% (2000K), Термостат 18.0°C, Штори закрито'
+      );
+    } else {
+      setActiveSceneMessage(
+        `Сцена Google Home «Ранок» активована: Плавний світанок 0→100% за ${alarmWindowMins} хв, Термостат 21.0°C`
+      );
+    }
+  };
+
+  const handleToggleSmartDevice = (id: string) => {
+    setSmartDevices((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, connected: !d.connected } : d))
+    );
+  };
+
+  const handleTestSmartDevice = (id: string) => {
+    setSmartDevices((prev) =>
+      prev.map((d) =>
+        d.id === id
+          ? { ...d, connected: true, lastTested: `Щойно (${nowTimeStr})` }
+          : d
+      )
+    );
+  };
+
+  const handleToggleWearable = (id: string) => {
+    setWearables((prev) =>
+      prev.map((w) =>
+        w.id === id
+          ? {
+              ...w,
+              connected: !w.connected,
+              lastSync: !w.connected ? `Сьогодні, ${nowTimeStr}` : w.lastSync,
+            }
+          : w
+      )
+    );
+  };
+
+  const handleTestWearable = (id: string) => {
+    setWearables((prev) =>
+      prev.map((w) =>
+        w.id === id
+          ? { ...w, connected: true, lastSync: `Щойно (${nowTimeStr})` }
+          : w
+      )
+    );
+  };
+
+  return (
+    <div
+      className={`min-h-screen bg-[#0F1220] text-[#E4E6F0] pb-24 md:pb-12 transition-all ${
+        largeFontScale ? 'text-[106%]' : ''
+      }`}
+    >
+      {/* Optional Post-20:00 Warm Amber Melatonin Shield Overlay */}
+      {amberNightFilter && (
+        <div
+          className="pointer-events-none fixed inset-0 z-40 bg-[#F4A261]/[0.06] mix-blend-multiply"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Top Bar Contract: 3 Zones (1. Single-element Brand Wordmark, 2. 4 Nav Links, 3. Onboarding + Profile Icon) */}
+      <header className="sticky top-0 z-30 h-14 px-4 sm:px-6 bg-[#0F1220]/90 backdrop-blur-md border-b border-[#262D47] flex items-center justify-between">
+        {/* Zone 1: Single text element Brand Wordmark */}
+        <a
+          href="#today"
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('today');
+          }}
+          className="font-display text-base sm:text-lg font-extrabold tracking-tight text-[#E4E6F0] whitespace-nowrap"
+        >
+          Sleep Coach
+        </a>
+
+        {/* Zone 2: 4 Clean Navigation Links on Desktop */}
+        <nav className="hidden md:flex items-center gap-7 text-sm font-medium">
+          {[
+            { id: 'today', label: 'Сьогодні' },
+            { id: 'schedule', label: 'Режим' },
+            { id: 'analytics', label: 'Аналітика' },
+            { id: 'smarthome', label: 'Дім і гаджети' },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as MainTab)}
+              className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
+                activeTab === item.id
+                  ? 'text-[#A390E4] font-bold underline underline-offset-8 decoration-2 decoration-[#A390E4]'
+                  : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Zone 3: Onboarding Trigger + Profile Icon (Налаштування, профіль і підписка) */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowOnboarding(true)}
+            className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#161B2E] hover:bg-[#1F2640] border border-[#262D47] text-xs font-semibold text-[#A390E4] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Онбординг (5 кроків)</span>
+          </button>
+
+          <button
+            onClick={() => setShowProfileSheet(true)}
+            className="min-h-[44px] min-w-[44px] rounded-2xl bg-[#161B2E] hover:bg-[#222944] border border-[#A390E4]/40 flex items-center justify-center text-[#E4E6F0] transition-colors cursor-pointer"
+            title="Налаштування, профіль і підписка"
+            aria-label="Налаштування, профіль і підписка"
+          >
+            <User className="w-5 h-5 text-[#A390E4]" />
+          </button>
+        </div>
+      </header>
+
+      {/* Active Reminder Toast Notification */}
+      {toastAlert && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="rounded-2xl p-4 bg-[#1E253D] border border-[#A390E4] text-[#E4E6F0] shadow-xl flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Bell className="w-5 h-5 text-[#F4A261] shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm font-bold">{toastAlert.title}</div>
+                <p className="text-xs text-[#9FA4BC] mt-0.5">{toastAlert.desc}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setToastAlert(null)}
+              className="min-h-[44px] min-w-[44px] rounded-xl bg-[#0F1220] flex items-center justify-center text-[#9FA4BC] cursor-pointer"
+              aria-label="Закрити сповіщення"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Workspace */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 space-y-6">
+        {/* Quiet Unboxed Context Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#9FA4BC] px-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Нічний режим без білих плям</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">Поточний час {nowTimeStr}</span>
+            <span aria-hidden="true">·</span>
+            <span>Відбій {bedTime}</span>
+            <span aria-hidden="true">·</span>
+            <span>Підйом {wakeTime}</span>
+          </div>
+
+          <button
+            onClick={() => setShowProfileSheet(true)}
+            className="hover:text-[#E4E6F0] underline underline-offset-4 cursor-pointer"
+          >
+            Профіль · Підписка · Доступність
+          </button>
+        </div>
+
+        {/* Tab 1: Сьогодні (feature-today) */}
+        {activeTab === 'today' && (
+          <ScreenToday
+            wakeTime={wakeTime}
+            bedTime={bedTime}
+            targetCycles={targetCycles}
+            sleepMelody={sleepMelody}
+            wakeMelody={wakeMelody}
+            windDownLeadMins={windDownLeadMins}
+            nowTimeStr={nowTimeStr}
+            weeklyData={weeklyData}
+            onNavigateTab={setActiveTab}
+            onTriggerSmartScene={handleTriggerSmartScene}
+            activeSceneMessage={activeSceneMessage}
+          />
+        )}
+
+        {/* Tab 2: Режим (feature-alarm) */}
+        {activeTab === 'schedule' && (
+          <ScreenSchedule
+            wakeTime={wakeTime}
+            onChangeWakeTime={setWakeTime}
+            targetCycles={targetCycles}
+            onChangeTargetCycles={setTargetCycles}
+            shiftMinutesStep={shiftMinutesStep}
+            onChangeShiftMinutesStep={setShiftMinutesStep}
+            shiftDaysInterval={shiftDaysInterval}
+            onChangeShiftDaysInterval={setShiftDaysInterval}
+            alarmWindowMins={alarmWindowMins}
+            onChangeAlarmWindowMins={setAlarmWindowMins}
+            fadeCurve={fadeCurve}
+            onChangeFadeCurve={setFadeCurve}
+            melodies={melodies}
+            onAddCustomMelody={(newTrack) =>
+              setMelodies((prev) => [newTrack, ...prev])
+            }
+            sleepMelodyId={sleepMelodyId}
+            onSelectSleepMelody={setSleepMelodyId}
+            wakeMelodyId={wakeMelodyId}
+            onSelectWakeMelody={setWakeMelodyId}
+            windDownLeadMins={windDownLeadMins}
+            onChangeWindDownLeadMins={setWindDownLeadMins}
+            dndEnabled={dndEnabled}
+            onToggleDnd={() => setDndEnabled((d) => !d)}
+            onTestReminder={(title, desc) => setToastAlert({ title, desc })}
+          />
+        )}
+
+        {/* Tab 3: Аналітика (feature-analytics) */}
+        {activeTab === 'analytics' && (
+          <ScreenAnalytics
+            weeklyData={weeklyData}
+            onUpdateDay={(dayId, updater) =>
+              setWeeklyData((prev) =>
+                prev.map((d) => (d.id === dayId ? updater(d) : d))
+              )
+            }
+          />
+        )}
+
+        {/* Tab 4: Дім і гаджети (feature-smarthome) */}
+        {activeTab === 'smarthome' && (
+          <ScreenSmartHome
+            smartDevices={smartDevices}
+            onToggleSmartDevice={handleToggleSmartDevice}
+            onTestSmartDevice={handleTestSmartDevice}
+            wearables={wearables}
+            onToggleWearable={handleToggleWearable}
+            onTestWearable={handleTestWearable}
+            googleHomeAuthorized={googleHomeAuthorized}
+            onToggleGoogleHomeAuth={() => setGoogleHomeAuthorized((a) => !a)}
+            onTriggerScene={handleTriggerSmartScene}
+            activeSceneBanner={activeSceneMessage}
+          />
+        )}
+      </main>
+
+      {/* Bottom Navigation (4 вкладки: Сьогодні, Режим, Аналітика, Дім і гаджети; min 48dp touch targets) */}
+      <nav
+        aria-label="Основна навігація Sleep Coach"
+        className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0F1220]/95 backdrop-blur-md border-t border-[#262D47] grid grid-cols-4 items-center max-w-6xl mx-auto px-2"
+      >
+        {[
+          { id: 'today', label: 'Сьогодні', icon: Moon },
+          { id: 'schedule', label: 'Режим', icon: Clock },
+          { id: 'analytics', label: 'Аналітика', icon: BarChart3 },
+          { id: 'smarthome', label: 'Дім і гаджети', icon: Home },
+        ].map((tab) => {
+          const IconComp = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as MainTab)}
+              className={`min-h-[48px] flex flex-col items-center justify-center rounded-2xl transition-colors cursor-pointer ${
+                active
+                  ? 'text-[#A390E4] font-bold'
+                  : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
+              }`}
+            >
+              <div
+                className={`px-4 py-1 rounded-full transition-colors ${
+                  active ? 'bg-[#A390E4]/15' : ''
+                }`}
+              >
+                <IconComp className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] mt-0.5 tracking-tight whitespace-nowrap">
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* 5-Step Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        targetCycles={targetCycles}
+        onChangeTargetCycles={setTargetCycles}
+        wakeTime={wakeTime}
+        onChangeWakeTime={setWakeTime}
+        melodies={melodies}
+        wakeMelodyId={wakeMelodyId}
+        onSelectWakeMelody={setWakeMelodyId}
+        googleHomeAuthorized={googleHomeAuthorized}
+        onConnectGoogleHome={() => setGoogleHomeAuthorized(true)}
+        wearableConnected={wearables[0]?.connected ?? true}
+        onConnectPrimaryWearable={() => handleToggleWearable('pixel_watch')}
+      />
+
+      {/* Profile, Settings, Subscription & Compose Architecture Sheet */}
+      <ProfileSettingsSheet
+        isOpen={showProfileSheet}
+        onClose={() => setShowProfileSheet(false)}
+        onOpenOnboarding={() => setShowOnboarding(true)}
+        amberNightFilter={amberNightFilter}
+        onToggleAmberNightFilter={() => setAmberNightFilter((f) => !f)}
+        largeFontScale={largeFontScale}
+        onToggleLargeFontScale={() => setLargeFontScale((s) => !s)}
+        handedness={handedness}
+        onChangeHandedness={setHandedness}
+      />
+
+      <OfflineIndicator />
+    </div>
+  );
+}

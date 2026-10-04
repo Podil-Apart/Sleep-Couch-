@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#EFECE4"/>
+  <!-- Outer biometric stopwatch arcs (Cobalt Blue left, Crimson Red right, inspired by Page 1 of the PDF) -->
+  <rect x="232" y="28" width="48" height="24" rx="6" fill="#1A3E72"/>
+  <path d="M 256 64 A 192 192 0 1 0 256 448" fill="none" stroke="#1A3E72" stroke-width="28"/>
+  <path d="M 256 64 A 192 192 0 1 1 256 448" fill="none" stroke="#C83228" stroke-width="28"/>
+  <circle cx="256" cy="256" r="144" fill="none" stroke="#1A3E72" stroke-width="10" stroke-dasharray="16 12"/>
+  <!-- Eye / Cycle Core -->
+  <path d="M 140 256 Q 256 164 372 256 Q 256 348 140 256 Z" fill="none" stroke="#1A3E72" stroke-width="16" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="46" fill="#1A3E72"/>
+  <path d="M 256 210 A 46 46 0 0 1 302 256 L 256 256 Z" fill="#C83228"/>
+  <circle cx="256" cy="256" r="14" fill="#EFECE4"/>
+</svg>
