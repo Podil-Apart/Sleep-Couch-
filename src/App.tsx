@@ -13,6 +13,8 @@ import {
   Bell,
   X,
   Sparkles,
+  Apple,
+  Smartphone,
 } from 'lucide-react';
 import {
   INITIAL_WEEKLY_DATA,
@@ -85,7 +87,12 @@ export default function App() {
     return INITIAL_WEEKLY_DATA;
   });
 
-  // Accessibility & Profile State
+  // Accessibility, Platform & Profile State
+  const [platformMode, setPlatformMode] = useState<'android' | 'ios'>(() => {
+    const saved = localStorage.getItem('sc_platform_mode');
+    if (saved === 'ios' || saved === 'android') return saved;
+    return 'ios'; // Default to iOS mode as requested
+  });
   const [amberNightFilter, setAmberNightFilter] = useState<boolean>(false);
   const [largeFontScale, setLargeFontScale] = useState<boolean>(false);
   const [handedness, setHandedness] = useState<Handedness>('right');
@@ -97,6 +104,10 @@ export default function App() {
     null
   );
   const [nowTimeStr, setNowTimeStr] = useState<string>('21:45');
+
+  useEffect(() => {
+    localStorage.setItem('sc_platform_mode', platformMode);
+  }, [platformMode]);
 
   useEffect(() => {
     localStorage.setItem('sc_wake_time', wakeTime);
@@ -232,23 +243,51 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Zone 3: Onboarding Trigger + Profile Icon (Налаштування, профіль і підписка) */}
-        <div className="flex items-center gap-2.5">
+        {/* Zone 3: Platform Switcher + Onboarding + Profile Icon */}
+        <div className="flex items-center gap-2">
+          {/* iOS / Android Platform Toggle Pill */}
+          <div className="flex items-center p-0.5 rounded-xl bg-[#161B2E] border border-[#262D47]">
+            <button
+              onClick={() => setPlatformMode('android')}
+              className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                platformMode === 'android'
+                  ? 'bg-[#A390E4] text-[#0F1220] shadow-sm'
+                  : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
+              }`}
+              title="Перемкнути інтерфейс на Android (Material 3)"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Android</span>
+            </button>
+            <button
+              onClick={() => setPlatformMode('ios')}
+              className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                platformMode === 'ios'
+                  ? 'bg-[#A390E4] text-[#0F1220] shadow-sm'
+                  : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
+              }`}
+              title="Перемкнути інтерфейс на Apple iOS (Human Interface Guidelines)"
+            >
+              <Apple className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">iOS</span>
+            </button>
+          </div>
+
           <button
             onClick={() => setShowOnboarding(true)}
-            className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#161B2E] hover:bg-[#1F2640] border border-[#262D47] text-xs font-semibold text-[#A390E4] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+            className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#161B2E] hover:bg-[#1F2640] border border-[#262D47] text-xs font-semibold text-[#A390E4] hidden sm:flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Онбординг (5 кроків)</span>
+            <span>Онбординг</span>
           </button>
 
           <button
             onClick={() => setShowProfileSheet(true)}
-            className="min-h-[44px] min-w-[44px] rounded-2xl bg-[#161B2E] hover:bg-[#222944] border border-[#A390E4]/40 flex items-center justify-center text-[#E4E6F0] transition-colors cursor-pointer"
-            title="Налаштування, профіль і підписка"
-            aria-label="Налаштування, профіль і підписка"
+            className="min-h-[40px] min-w-[40px] rounded-2xl bg-[#161B2E] hover:bg-[#222944] border border-[#A390E4]/40 flex items-center justify-center text-[#E4E6F0] transition-colors cursor-pointer"
+            title="Налаштування, архітектура Swift/Kotlin та підписка"
+            aria-label="Налаштування, архітектура Swift/Kotlin та підписка"
           >
-            <User className="w-5 h-5 text-[#A390E4]" />
+            {platformMode === 'ios' ? <Apple className="w-4 h-4 text-[#A390E4]" /> : <User className="w-4 h-4 text-[#A390E4]" />}
           </button>
         </div>
       </header>
@@ -280,7 +319,10 @@ export default function App() {
         {/* Quiet Unboxed Context Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#9FA4BC] px-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span>Нічний режим без білих плям</span>
+            <span className="flex items-center gap-1">
+              {platformMode === 'ios' ? <Apple className="w-3.5 h-3.5 text-[#A390E4]" /> : <Smartphone className="w-3.5 h-3.5 text-[#F4A261]" />}
+              <span>{platformMode === 'ios' ? 'iOS HIG режим' : 'Android M3'}</span>
+            </span>
             <span aria-hidden="true">·</span>
             <span className="font-mono tabular-nums">Поточний час {nowTimeStr}</span>
             <span aria-hidden="true">·</span>
@@ -293,7 +335,7 @@ export default function App() {
             onClick={() => setShowProfileSheet(true)}
             className="hover:text-[#E4E6F0] underline underline-offset-4 cursor-pointer"
           >
-            Профіль · Підписка · Доступність
+            {platformMode === 'ios' ? 'SwiftUI · Apple Health · Підписка' : 'Профіль · Підписка · Доступність'}
           </button>
         </div>
 
@@ -311,6 +353,7 @@ export default function App() {
             onNavigateTab={setActiveTab}
             onTriggerSmartScene={handleTriggerSmartScene}
             activeSceneMessage={activeSceneMessage}
+            platformMode={platformMode}
           />
         )}
 
@@ -370,46 +413,62 @@ export default function App() {
             onToggleGoogleHomeAuth={() => setGoogleHomeAuthorized((a) => !a)}
             onTriggerScene={handleTriggerSmartScene}
             activeSceneBanner={activeSceneMessage}
+            platformMode={platformMode}
           />
         )}
       </main>
 
-      {/* Bottom Navigation (4 вкладки: Сьогодні, Режим, Аналітика, Дім і гаджети; min 48dp touch targets) */}
+      {/* Bottom Navigation */}
       <nav
         aria-label="Основна навігація Sleep Coach"
-        className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0F1220]/95 backdrop-blur-md border-t border-[#262D47] grid grid-cols-4 items-center max-w-6xl mx-auto px-2"
+        className={`fixed bottom-0 left-0 right-0 z-40 max-w-6xl mx-auto transition-all ${
+          platformMode === 'ios'
+            ? 'h-20 bg-[#0F1220]/85 backdrop-blur-2xl border-t border-white/10'
+            : 'h-16 bg-[#0F1220]/95 backdrop-blur-md border-t border-[#262D47]'
+        }`}
       >
-        {[
-          { id: 'today', label: 'Сьогодні', icon: Moon },
-          { id: 'schedule', label: 'Режим', icon: Clock },
-          { id: 'analytics', label: 'Аналітика', icon: BarChart3 },
-          { id: 'smarthome', label: 'Дім і гаджети', icon: Home },
-        ].map((tab) => {
-          const IconComp = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as MainTab)}
-              className={`min-h-[48px] flex flex-col items-center justify-center rounded-2xl transition-colors cursor-pointer ${
-                active
-                  ? 'text-[#A390E4] font-bold'
-                  : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
-              }`}
-            >
-              <div
-                className={`px-4 py-1 rounded-full transition-colors ${
-                  active ? 'bg-[#A390E4]/15' : ''
+        <div className="grid grid-cols-4 items-center h-14 px-2">
+          {[
+            { id: 'today', label: 'Сьогодні', icon: Moon },
+            { id: 'schedule', label: 'Режим', icon: Clock },
+            { id: 'analytics', label: 'Аналітика', icon: BarChart3 },
+            { id: 'smarthome', label: 'Дім і гаджети', icon: Home },
+          ].map((tab) => {
+            const IconComp = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as MainTab);
+                  if (platformMode === 'ios' && 'vibrate' in navigator) {
+                    try { navigator.vibrate(10); } catch {}
+                  }
+                }}
+                className={`min-h-[48px] flex flex-col items-center justify-center rounded-2xl transition-all cursor-pointer ${
+                  active
+                    ? 'text-[#A390E4] font-bold'
+                    : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
                 }`}
               >
-                <IconComp className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] mt-0.5 tracking-tight whitespace-nowrap">
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
+                <div
+                  className={`px-3.5 py-1 rounded-full transition-all ${
+                    active ? (platformMode === 'ios' ? 'bg-[#A390E4]/20 scale-105' : 'bg-[#A390E4]/15') : ''
+                  }`}
+                >
+                  <IconComp className="w-5 h-5" />
+                </div>
+                <span className={`text-[11px] mt-0.5 tracking-tight whitespace-nowrap ${platformMode === 'ios' ? 'font-medium' : ''}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* iOS Home Indicator Bar */}
+        {platformMode === 'ios' && (
+          <div className="w-32 h-1 rounded-full bg-white/25 mx-auto -mt-1" />
+        )}
       </nav>
 
       {/* 5-Step Onboarding Modal */}
@@ -429,11 +488,13 @@ export default function App() {
         onConnectPrimaryWearable={() => handleToggleWearable('pixel_watch')}
       />
 
-      {/* Profile, Settings, Subscription & Compose Architecture Sheet */}
+      {/* Profile, Settings, Subscription & Native Architecture Sheet */}
       <ProfileSettingsSheet
         isOpen={showProfileSheet}
         onClose={() => setShowProfileSheet(false)}
         onOpenOnboarding={() => setShowOnboarding(true)}
+        platformMode={platformMode}
+        onChangePlatformMode={setPlatformMode}
         amberNightFilter={amberNightFilter}
         onToggleAmberNightFilter={() => setAmberNightFilter((f) => !f)}
         largeFontScale={largeFontScale}

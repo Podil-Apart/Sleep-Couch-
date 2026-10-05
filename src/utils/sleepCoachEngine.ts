@@ -228,6 +228,94 @@ export const INITIAL_WEARABLES: WearableDevice[] = [
   },
 ];
 
+// iOS Apple HomeKit Devices & Scenes
+export const INITIAL_IOS_SMARTHOME_DEVICES: SmartHomeDevice[] = [
+  {
+    id: 'apple_homepod',
+    name: 'Apple HomePod mini (AirPlay 2)',
+    room: 'Приліжкова зона',
+    type: 'speaker',
+    connected: true,
+    bedtimeState: 'Акустичний купол дощу (Siri Shortcut "Wind-Down")',
+    morningState: 'Стерео-світанок 432 Гц через AirPlay 2 з поступовим наростанням',
+  },
+  {
+    id: 'nanoleaf_matter',
+    name: 'Nanoleaf Essentials (Apple Home / Thread)',
+    room: 'Спальня',
+    type: 'light',
+    connected: true,
+    bedtimeState: 'Apple Adaptive Lighting: Бурштиновий 1800K (яскравість 6%)',
+    morningState: 'Симуляція світанку 0% → 100% (2400K–4500K)',
+  },
+  {
+    id: 'ecobee_thermostat',
+    name: 'Ecobee SmartThermostat (HomeKit)',
+    room: 'Спальня',
+    type: 'thermostat',
+    connected: true,
+    bedtimeState: 'Охолодження спальні до 18.0°C для глибоких фаз NREM',
+    morningState: 'Комфортний підігрів до 21.0°C за 15 хв до будильника',
+  },
+  {
+    id: 'eve_blinds',
+    name: 'Eve MotionBlinds (Apple HomeKit / Matter)',
+    room: 'Спальня',
+    type: 'blinds',
+    connected: false,
+    bedtimeState: 'Повне закриття 100% за командою "Hey Siri, Good Night"',
+    morningState: 'Синхронне відкриття штор під час кривої пробудження',
+  },
+];
+
+// iOS Apple Health / HealthKit Wearables
+export const INITIAL_IOS_WEARABLES: WearableDevice[] = [
+  {
+    id: 'apple_watch_ultra',
+    name: 'Apple Watch Ultra 2 (watchOS 11)',
+    brand: 'Apple HealthKit · Native',
+    sourceType: 'Wear OS',
+    connected: true,
+    lastSync: 'Сьогодні, 06:31',
+    metricsProvided: ['Фази сну (Core / Deep / REM / Awake)', 'ЧСС у спокої', 'HRV (SDNN)', 'Температура запʼястя'],
+    batteryPct: 88,
+    testSample: { restingHr: 51, hrvMs: 76, spo2Pct: 99, deepSleepMins: 110 },
+  },
+  {
+    id: 'apple_watch_s10',
+    name: 'Apple Watch Series 10',
+    brand: 'Apple HealthKit · Native',
+    sourceType: 'Wear OS',
+    connected: false,
+    lastSync: 'Вчора, 22:45',
+    metricsProvided: ['Sleep Analysis', 'HRV', 'Дихання уві сні', 'Виявлення апное'],
+    batteryPct: 94,
+    testSample: { restingHr: 54, hrvMs: 72, spo2Pct: 98, deepSleepMins: 102 },
+  },
+  {
+    id: 'oura_ring_ios',
+    name: 'Oura Ring Gen 4 (HealthKit Sync)',
+    brand: 'Oura Cloud → Apple Health',
+    sourceType: 'Garmin',
+    connected: false,
+    lastSync: 'Не синхронізовано',
+    metricsProvided: ['Readiness Score', 'Sleep Balance', 'Денні мікропаузи Rest'],
+    batteryPct: 80,
+    testSample: { restingHr: 49, hrvMs: 82, spo2Pct: 98, deepSleepMins: 118 },
+  },
+  {
+    id: 'whoop_ios',
+    name: 'WHOOP 4.0 / 5.0 (HealthKit)',
+    brand: 'WHOOP Strap → Apple Health',
+    sourceType: 'Fitbit',
+    connected: false,
+    lastSync: 'Не синхронізовано',
+    metricsProvided: ['Sleep Need %', 'Recovery Score', 'HRV Baseline'],
+    batteryPct: 65,
+    testSample: { restingHr: 52, hrvMs: 74, spo2Pct: 98, deepSleepMins: 106 },
+  },
+];
+
 // Detailed Nightly Hypnogram (7h 12m = 432 mins across 5 cycles from 23:06 to 06:18)
 export const LAST_NIGHT_HYPNOGRAM: SleepStageSegment[] = [
   { timeLabel: '23:05', stage: 'awake', durationMins: 12 },

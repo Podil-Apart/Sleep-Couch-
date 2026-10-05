@@ -33,6 +33,7 @@ import {
   generateLocalSleepAdvice,
   analyzeWeeklyData,
 } from '../utils/geminiSleepCoach';
+import { IOSLiveActivity } from './IOSLiveActivity';
 
 interface ScreenTodayProps {
   wakeTime: string;
@@ -46,6 +47,7 @@ interface ScreenTodayProps {
   onNavigateTab: (tab: 'today' | 'schedule' | 'analytics' | 'smarthome') => void;
   onTriggerSmartScene: (scene: 'bedtime' | 'morning') => void;
   activeSceneMessage: string | null;
+  platformMode?: 'android' | 'ios';
 }
 
 export const ScreenToday: React.FC<ScreenTodayProps> = ({
@@ -60,6 +62,7 @@ export const ScreenToday: React.FC<ScreenTodayProps> = ({
   onNavigateTab,
   onTriggerSmartScene,
   activeSceneMessage,
+  platformMode = 'android',
 }) => {
   // Circle mode: 'countdown' (Час до відбою) or 'summary' (Ви спали 7г 12хв з оцінкою якості)
   const [circleMode, setCircleMode] = useState<'countdown' | 'summary'>('summary');
@@ -160,6 +163,19 @@ export const ScreenToday: React.FC<ScreenTodayProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Apple Dynamic Island & Live Activity (iOS Mode Exclusive) */}
+      {platformMode === 'ios' && (
+        <IOSLiveActivity
+          bedTime={bedTime}
+          wakeTime={wakeTime}
+          targetCycles={targetCycles}
+          nowTimeStr={nowTimeStr}
+          windDownActive={windDownActive}
+          onToggleWindDown={() => (windDownActive ? stopWindDownRitual() : startWindDownRitual())}
+          sleepMelodyTitle={sleepMelody.title}
+        />
+      )}
+
       {/* Top Grid: Hero Biometric Circle + Today's Plan Card */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Left 6 Cols: Large Center Circle (Час до відбою OR Ви спали 7г 12хв з оцінкою якості) */}
