@@ -15,6 +15,10 @@ import {
   Sparkles,
   Apple,
   Smartphone,
+  UserPlus,
+  Crown,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import {
   INITIAL_WEEKLY_DATA,
@@ -33,12 +37,21 @@ import {
   FadeCurveType,
   sleepCoachMedia,
 } from './utils/sleepCoachEngine';
+import {
+  getCurrentUser,
+  UserAccount,
+  updateUserPlan,
+  logoutAccount,
+  isGuestUser,
+} from './utils/authEngine';
+import { PlanTier, getStoredPlanTier, saveStoredPlanTier } from './utils/subscriptionEngine';
 import { ScreenToday } from './components/ScreenToday';
 import { ScreenSchedule } from './components/ScreenSchedule';
 import { ScreenAnalytics } from './components/ScreenAnalytics';
 import { ScreenSmartHome } from './components/ScreenSmartHome';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileSettingsSheet } from './components/ProfileSettingsSheet';
+import { AuthModal } from './components/AuthModal';
 import { OfflineIndicator } from './components/PWAInstallButton';
 
 type MainTab = 'today' | 'schedule' | 'analytics' | 'smarthome';
@@ -86,6 +99,59 @@ export default function App() {
     }
     return INITIAL_WEEKLY_DATA;
   });
+
+  // User Authentication & Profile State
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => getCurrentUser());
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  // Subscription Plan Tier (Free vs Pro)
+  const [planTier, setPlanTier] = useState<PlanTier>(() => getStoredPlanTier());
+
+  useEffect(() => {
+    saveStoredPlanTier(planTier);
+  }, [planTier]);
+
+  const handleUpgradeToPro = () => {
+    setPlanTier('pro');
+    saveStoredPlanTier('pro');
+    if (currentUser?.id) {
+      const updated = updateUserPlan(currentUser.id, 'pro');
+      if (updated) setCurrentUser(updated);
+    }
+    setToastAlert({
+      title: 'Sleep Coach Pro Активовано 👑',
+      desc: 'Підключення гаджетів (Apple Watch, Garmin, Oura, Google Home) розблоковано!',
+    });
+  };
+
+  const handleChangePlanTier = (tier: PlanTier) => {
+    setPlanTier(tier);
+    saveStoredPlanTier(tier);
+    if (currentUser?.id) {
+      const updated = updateUserPlan(currentUser.id, tier);
+      if (updated) setCurrentUser(updated);
+    }
+    setToastAlert({
+      title: tier === 'pro' ? 'Sleep Coach Pro Активовано 👑' : 'Базовий тариф (Free) активовано',
+      desc:
+        tier === 'pro'
+          ? 'Усі функції синхронізації гаджетів та розумного дому розблоковано!'
+          : 'У базовому тарифі доступні розклад R90, розумний будильник та аудіо-ритуали.',
+    });
+  };
+
+  const handleLogout = () => {
+    const guestUser = logoutAccount();
+    setCurrentUser(guestUser);
+    setPlanTier('free');
+    saveStoredPlanTier('free');
+    setShowProfileSheet(false);
+    setShowAuthModal(false);
+    setToastAlert({
+      title: 'Вихід з акаунту виконано',
+      desc: 'Ви успішно вийшли з облікового запису. Активовано гостьовий режим із базовим тарифом.',
+    });
+  };
 
   // Accessibility, Platform & Profile State
   const [platformMode, setPlatformMode] = useState<'android' | 'ios'>(() => {
@@ -227,24 +293,43 @@ export default function App() {
             { id: 'today', label: 'Сьогодні' },
             { id: 'schedule', label: 'Режим' },
             { id: 'analytics', label: 'Аналітика' },
-            { id: 'smarthome', label: 'Дім і гаджети' },
+            { id: 'smarthome', label: 'Дім і гаджети', badge: planTier === 'free' ? 'PRO' : null },
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as MainTab)}
-              className={`py-1 transition-colors whitespace-nowrap cursor-pointer ${
+              className={`py-1 transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
                 activeTab === item.id
                   ? 'text-[#A390E4] font-bold underline underline-offset-8 decoration-2 decoration-[#A390E4]'
                   : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
               }`}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.badge && (
+                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-[#F4A261]/20 text-[#F4A261] border border-[#F4A261]/40">
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
 
-        {/* Zone 3: Platform Switcher + Onboarding + Profile Icon */}
+        {/* Zone 3: Platform Switcher + Onboarding + Profile Icon + Subscription Tier */}
         <div className="flex items-center gap-2">
+          {/* Subscription Tier Badge */}
+          <button
+            onClick={() => setShowProfileSheet(true)}
+            className={`min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              planTier === 'pro'
+                ? 'bg-[#F4A261]/20 border border-[#F4A261]/50 text-[#F4A261] hover:bg-[#F4A261]/30'
+                : 'bg-[#161B2E] border border-[#262D47] text-[#9FA4BC] hover:text-[#E4E6F0]'
+            }`}
+            title={planTier === 'pro' ? 'Тариф Sleep Coach Pro: Гаджети підключено' : 'Базовий тариф Free: Натисніть для переходу на Pro'}
+          >
+            <Crown className="w-3.5 h-3.5 text-[#F4A261]" />
+            <span className="uppercase text-[11px] font-extrabold">{planTier === 'pro' ? 'PRO' : 'FREE'}</span>
+          </button>
+
           {/* iOS / Android Platform Toggle Pill */}
           <div className="flex items-center p-0.5 rounded-xl bg-[#161B2E] border border-[#262D47]">
             <button
@@ -272,6 +357,36 @@ export default function App() {
               <span className="hidden sm:inline">iOS</span>
             </button>
           </div>
+
+          {/* User Account / Register Button */}
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="min-h-[36px] px-2.5 py-1 rounded-xl bg-[#161B2E] hover:bg-[#202742] border border-[#262D47] flex items-center gap-2 text-xs font-semibold text-[#E4E6F0] transition-colors cursor-pointer"
+            title={isGuestUser(currentUser) ? 'Увійти або зареєструватися' : `Акаунт: ${currentUser.name} (${currentUser.email})`}
+          >
+            <div
+              className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+              style={{ backgroundColor: currentUser.avatarColor || '#A390E4' }}
+            >
+              {currentUser.avatarInitials}
+            </div>
+            <span className="hidden md:inline truncate max-w-[90px]">
+              {isGuestUser(currentUser) ? 'Увійти' : currentUser.name.split(' ')[0]}
+            </span>
+          </button>
+
+          {/* Quick Logout Button when authenticated */}
+          {!isGuestUser(currentUser) && (
+            <button
+              onClick={handleLogout}
+              className="min-h-[36px] px-2 py-1 rounded-xl bg-[#161B2E] hover:bg-rose-950/60 hover:border-rose-500/50 hover:text-rose-300 border border-[#262D47] flex items-center gap-1.5 text-xs text-[#9FA4BC] transition-colors cursor-pointer"
+              title={`Вийти з акаунту (${currentUser.name})`}
+              aria-label="Вийти з акаунту"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden xl:inline text-[11px] font-medium text-rose-300">Вийти</span>
+            </button>
+          )}
 
           <button
             onClick={() => setShowOnboarding(true)}
@@ -354,6 +469,10 @@ export default function App() {
             onTriggerSmartScene={handleTriggerSmartScene}
             activeSceneMessage={activeSceneMessage}
             platformMode={platformMode}
+            planTier={planTier}
+            currentUser={currentUser}
+            onUpdateCurrentUser={(updated) => setCurrentUser(updated)}
+            onShowToast={(title, desc) => setToastAlert({ title, desc })}
           />
         )}
 
@@ -414,6 +533,9 @@ export default function App() {
             onTriggerScene={handleTriggerSmartScene}
             activeSceneBanner={activeSceneMessage}
             platformMode={platformMode}
+            planTier={planTier}
+            onUpgradeToPro={handleUpgradeToPro}
+            onTogglePlanTier={() => handleChangePlanTier(planTier === 'pro' ? 'free' : 'pro')}
           />
         )}
       </main>
@@ -432,7 +554,7 @@ export default function App() {
             { id: 'today', label: 'Сьогодні', icon: Moon },
             { id: 'schedule', label: 'Режим', icon: Clock },
             { id: 'analytics', label: 'Аналітика', icon: BarChart3 },
-            { id: 'smarthome', label: 'Дім і гаджети', icon: Home },
+            { id: 'smarthome', label: 'Дім і гаджети', icon: Home, isProFeature: planTier === 'free' },
           ].map((tab) => {
             const IconComp = tab.icon;
             const active = activeTab === tab.id;
@@ -445,18 +567,23 @@ export default function App() {
                     try { navigator.vibrate(10); } catch {}
                   }
                 }}
-                className={`min-h-[48px] flex flex-col items-center justify-center rounded-2xl transition-all cursor-pointer ${
+                className={`min-h-[48px] flex flex-col items-center justify-center rounded-2xl transition-all cursor-pointer relative ${
                   active
                     ? 'text-[#A390E4] font-bold'
                     : 'text-[#9FA4BC] hover:text-[#E4E6F0]'
                 }`}
               >
                 <div
-                  className={`px-3.5 py-1 rounded-full transition-all ${
+                  className={`px-3.5 py-1 rounded-full transition-all relative ${
                     active ? (platformMode === 'ios' ? 'bg-[#A390E4]/20 scale-105' : 'bg-[#A390E4]/15') : ''
                   }`}
                 >
                   <IconComp className="w-5 h-5" />
+                  {tab.isProFeature && (
+                    <span className="absolute -top-1 -right-1 text-[8px] font-extrabold px-1 py-0.2 rounded-full bg-[#F4A261] text-[#0F1220]">
+                      PRO
+                    </span>
+                  )}
                 </div>
                 <span className={`text-[11px] mt-0.5 tracking-tight whitespace-nowrap ${platformMode === 'ios' ? 'font-medium' : ''}`}>
                   {tab.label}
@@ -493,6 +620,11 @@ export default function App() {
         isOpen={showProfileSheet}
         onClose={() => setShowProfileSheet(false)}
         onOpenOnboarding={() => setShowOnboarding(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => {
+          setShowProfileSheet(false);
+          setShowAuthModal(true);
+        }}
         platformMode={platformMode}
         onChangePlatformMode={setPlatformMode}
         amberNightFilter={amberNightFilter}
@@ -501,6 +633,31 @@ export default function App() {
         onToggleLargeFontScale={() => setLargeFontScale((s) => !s)}
         handedness={handedness}
         onChangeHandedness={setHandedness}
+        planTier={planTier}
+        onChangePlanTier={handleChangePlanTier}
+        onLogout={handleLogout}
+      />
+
+      {/* Account Registration, Login & Multi-User Switcher Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        onUserChanged={(u) => {
+          setCurrentUser(u);
+          setWakeTime(u.wakeTime);
+          setTargetCycles(u.targetCycles);
+          if (u.plan) {
+            setPlanTier(u.plan);
+            saveStoredPlanTier(u.plan);
+          }
+          setToastAlert({
+            title: 'Акаунт активовано',
+            desc: `Увійшли як ${u.name} (${u.email}) · Тариф: ${u.plan === 'pro' ? 'Sleep Coach Pro 👑' : 'Базовий (Free)'}`,
+          });
+        }}
+        platformMode={platformMode}
+        onLogout={handleLogout}
       />
 
       <OfflineIndicator />

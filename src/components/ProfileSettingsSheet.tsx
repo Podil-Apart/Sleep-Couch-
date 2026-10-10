@@ -12,14 +12,28 @@ import {
   Apple,
   Copy,
   CheckCheck,
+  UserPlus,
+  Lock,
+  Zap,
+  Watch,
+  Home,
+  Shield,
+  LogOut,
+  LogIn,
+  BookOpen,
+  Star,
 } from 'lucide-react';
 import { Handedness } from '../utils/r90Engine';
+import { UserAccount, isGuestUser } from '../utils/authEngine';
+import { PlanTier, PLAN_FEATURES } from '../utils/subscriptionEngine';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface ProfileSettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenOnboarding: () => void;
+  currentUser: UserAccount;
+  onOpenAuthModal: () => void;
   platformMode: 'android' | 'ios';
   onChangePlatformMode: (mode: 'android' | 'ios') => void;
   amberNightFilter: boolean;
@@ -28,12 +42,17 @@ interface ProfileSettingsSheetProps {
   onToggleLargeFontScale: () => void;
   handedness: Handedness;
   onChangeHandedness: (h: Handedness) => void;
+  planTier?: PlanTier;
+  onChangePlanTier?: (tier: PlanTier) => void;
+  onLogout?: () => void;
 }
 
 export const ProfileSettingsSheet: React.FC<ProfileSettingsSheetProps> = ({
   isOpen,
   onClose,
   onOpenOnboarding,
+  currentUser,
+  onOpenAuthModal,
   platformMode,
   onChangePlatformMode,
   amberNightFilter,
@@ -42,10 +61,13 @@ export const ProfileSettingsSheet: React.FC<ProfileSettingsSheetProps> = ({
   onToggleLargeFontScale,
   handedness,
   onChangeHandedness,
+  planTier = 'pro',
+  onChangePlanTier,
+  onLogout,
 }) => {
   const [activeSection, setActiveSection] = useState<'profile' | 'ios' | 'android'>('profile');
-  const [planTier, setPlanTier] = useState<'pro' | 'free'>('pro');
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
+  const [showAllFeatures, setShowAllFeatures] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
@@ -300,25 +322,312 @@ actor HealthKitSleepManager {
         {/* Content based on Active Section */}
         {activeSection === 'profile' && (
           <div className="space-y-5">
-            {/* Subscription Card */}
-            <div className="p-5 rounded-2xl bg-[#0F1220] border border-[#A390E4]/50 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#F4A261]">
-                  <Crown className="w-4 h-4" />
-                  <span>ПІДПИСКА SLEEP COACH PRO</span>
+            {/* User Account Identity Card */}
+            <div className="p-5 rounded-2xl bg-[#0F1220] border border-[#262D47] space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-white text-base shadow-md"
+                    style={{ backgroundColor: currentUser.avatarColor || '#A390E4' }}
+                  >
+                    {currentUser.avatarInitials}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-[#E4E6F0]">{currentUser.name}</h3>
+                      {currentUser.role === 'admin' ? (
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#F4A261]/20 border border-[#F4A261]/40 text-[#F4A261]">
+                          Адміністратор
+                        </span>
+                      ) : isGuestUser(currentUser) ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700/60 border border-slate-600/50 text-[#9FA4BC]">
+                          Гість
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#A390E4]/15 border border-[#A390E4]/40 text-[#A390E4]">
+                          Клієнт
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-[#9FA4BC] mt-0.5">{currentUser.email}</div>
+                    <div className="text-[11px] text-[#A390E4] font-mono mt-0.5">
+                      {isGuestUser(currentUser)
+                        ? 'Гостьовий сеанс · Базовий тариф сну'
+                        : `Зареєстровано ${currentUser.registeredAt} · Ціль: ${currentUser.targetCycles} циклів R90`}
+                    </div>
+                  </div>
                 </div>
-                <span className="font-mono text-xs text-[#A390E4]">Активна</span>
+
+                {!isGuestUser(currentUser) && onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="min-h-[40px] px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors"
+                    title="Вийти з поточного акаунту"
+                  >
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    <span>Вийти з акаунту</span>
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-[#9FA4BC] leading-relaxed">
-                Повний доступ до 90-хвилинної аналітики R90, розумних сцен Apple HomeKit та Google Home, інтеграції Apple Watch, Garmin, Oura Ring та бібліотеки мелодій.
-              </p>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
+
+              <div className="pt-2 border-t border-[#262D47] flex flex-wrap gap-2">
                 <button
-                  onClick={() => setPlanTier(planTier === 'pro' ? 'free' : 'pro')}
-                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#161B2E] border border-[#262D47] text-xs font-semibold text-[#E4E6F0] cursor-pointer"
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#A390E4] hover:bg-[#b2a2ea] text-[#0F1220] text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors"
                 >
-                  Тариф: {planTier === 'pro' ? 'Річний Pro (Активний)' : 'Базовий безкоштовний'}
+                  {isGuestUser(currentUser) ? (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Увійти / Зареєструватися</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Змінити акаунт / Реєстрація</span>
+                    </>
+                  )}
                 </button>
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#1E253D] hover:bg-[#283254] text-[#E4E6F0] text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Shield className="w-4 h-4 text-[#F4A261]" />
+                  <span>Керування / Панель адміна</span>
+                </button>
+
+                {!isGuestUser(currentUser) && onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="sm:hidden w-full min-h-[44px] px-4 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Вийти з акаунту</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Sleep Journal in Profile Overview */}
+            <div className="p-4 rounded-2xl bg-[#0F1220] border border-[#262D47] space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 font-bold text-[#E4E6F0]">
+                  <BookOpen className="w-4 h-4 text-[#A390E4]" />
+                  <span>Ранковий щоденник сну в профілі</span>
+                </div>
+                <span className="text-[#9FA4BC] font-mono text-[11px]">
+                  {currentUser.sleepJournal && currentUser.sleepJournal.length > 0
+                    ? `${currentUser.sleepJournal.length} запис(ів)`
+                    : 'Немає записів'}
+                </span>
+              </div>
+              {currentUser.sleepJournal && currentUser.sleepJournal.length > 0 ? (
+                <div className="text-xs text-[#9FA4BC] space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[#E4E6F0]">
+                      Останній запис за {currentUser.sleepJournal[0].date}
+                    </span>
+                    <span className="text-[#F4A261] font-bold flex items-center gap-0.5">
+                      <Star className="w-3 h-3 fill-[#F4A261]" />
+                      {currentUser.sleepJournal[0].sleepQuality}/5
+                    </span>
+                    {currentUser.sleepJournal[0].stressors && currentUser.sleepJournal[0].stressors.length > 0 && (
+                      <span className="text-[11px] text-[#A390E4]">
+                        · {currentUser.sleepJournal[0].stressors.join(', ')}
+                      </span>
+                    )}
+                  </div>
+                  {currentUser.sleepJournal[0].qualityNotes && (
+                    <p className="italic text-[#9FA4BC] line-clamp-1">
+                      «{currentUser.sleepJournal[0].qualityNotes}»
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-[#9FA4BC]">
+                  Ви можете додавати спостереження щоранку у вкладці «Сьогодні».
+                </p>
+              )}
+            </div>
+
+            {/* Subscription Plans: Free vs Pro Division */}
+            <div className="p-5 rounded-2xl bg-[#0F1220] border border-[#A390E4]/40 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#F4A261]">
+                    <Crown className="w-4 h-4" />
+                    <span>ТАРИФНІ ПЛАНИ: БЕЗКОШТОВНИЙ ТА PRO</span>
+                  </div>
+                  <div className="text-xs text-[#9FA4BC] mt-0.5">
+                    У безкоштовному плані — базові функції сну. У Pro — підключення гаджетів та розумного дому.
+                  </div>
+                </div>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-bold self-start sm:self-auto ${
+                  planTier === 'pro'
+                    ? 'bg-[#F4A261]/20 border border-[#F4A261]/50 text-[#F4A261]'
+                    : 'bg-[#A390E4]/15 border border-[#A390E4]/40 text-[#A390E4]'
+                }`}>
+                  {planTier === 'pro' ? 'Активний Pro 👑' : 'Активний Free'}
+                </span>
+              </div>
+
+              {/* Two Plan Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Plan 1: Free */}
+                <div
+                  onClick={() => onChangePlanTier && onChangePlanTier('free')}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                    planTier === 'free'
+                      ? 'bg-[#161B2E] border-[#A390E4] shadow-md ring-1 ring-[#A390E4]'
+                      : 'bg-[#0B0E18] border-[#262D47] opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-[#E4E6F0]">Базовий (Free)</span>
+                      <span className="text-xs font-mono font-bold text-[#9FA4BC]">0 ₴ / завжди</span>
+                    </div>
+                    <p className="text-[11px] text-[#9FA4BC] leading-relaxed">
+                      Для щоденного ритму за методикою R90 без підключення зовнішніх пристроїв.
+                    </p>
+                    <div className="space-y-1.5 pt-1 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-[#52B788]">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Цикли сну R90 (90 хв)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#52B788]">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Розумний будильник із наростанням</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#52B788]">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Бібліотека мелодій сну та SAF</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#52B788]">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Вечірній Wind-Down ритуал</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#9FA4BC] pt-1">
+                        <Lock className="w-3.5 h-3.5 shrink-0 text-[#F4A261]" />
+                        <span>Підключення гаджетів недоступне</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChangePlanTier && onChangePlanTier('free');
+                    }}
+                    className={`w-full min-h-[38px] rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      planTier === 'free'
+                        ? 'bg-[#1E253D] text-[#A390E4] border border-[#A390E4]/40'
+                        : 'bg-[#161B2E] text-[#9FA4BC] hover:text-[#E4E6F0]'
+                    }`}
+                  >
+                    {planTier === 'free' ? 'Поточний тариф' : 'Перемкнути на Free'}
+                  </button>
+                </div>
+
+                {/* Plan 2: Pro */}
+                <div
+                  onClick={() => onChangePlanTier && onChangePlanTier('pro')}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 relative overflow-hidden ${
+                    planTier === 'pro'
+                      ? 'bg-gradient-to-b from-[#1C2038] to-[#161B2E] border-[#F4A261] shadow-lg ring-1 ring-[#F4A261]'
+                      : 'bg-[#0B0E18] border-[#262D47] opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Crown className="w-4 h-4 text-[#F4A261]" />
+                        <span className="text-sm font-extrabold text-[#E4E6F0]">Sleep Coach Pro</span>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-[#F4A261]">199 ₴ / міс</span>
+                    </div>
+                    <p className="text-[11px] text-[#9FA4BC] leading-relaxed">
+                      Повне підключення гаджетів, HealthKit, розумного дому Google Home та Apple HomeKit.
+                    </p>
+                    <div className="space-y-1.5 pt-1 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-[#52B788]">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0] font-semibold">Усі функції базового плану</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#F4A261]">
+                        <Watch className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0] font-bold">Підключення трекерів (Apple Watch, Garmin, Oura)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#F4A261]">
+                        <Zap className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Біометрія (HRV, пульс спокою, SpO2)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#F4A261]">
+                        <Home className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Розумний дім: Google Home & Apple HomeKit</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#F4A261]">
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[#E4E6F0]">Сцени сну, Siri Shortcuts & AI порадник</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChangePlanTier && onChangePlanTier('pro');
+                    }}
+                    className={`w-full min-h-[38px] rounded-lg text-xs font-bold transition-all cursor-pointer shadow-md ${
+                      planTier === 'pro'
+                        ? 'bg-gradient-to-r from-[#A390E4] to-[#F4A261] text-[#0F1220]'
+                        : 'bg-[#A390E4] hover:bg-[#b2a2ea] text-[#0F1220]'
+                    }`}
+                  >
+                    {planTier === 'pro' ? 'Активний Pro (Підключено)' : 'Активувати Sleep Coach Pro'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible Feature Comparison Table */}
+              <div className="pt-2 border-t border-[#262D47]">
+                <button
+                  type="button"
+                  onClick={() => setShowAllFeatures(!showAllFeatures)}
+                  className="text-xs text-[#A390E4] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>{showAllFeatures ? 'Згорнути порівняння тарифів' : 'Повний список відмінностей Free та Pro'}</span>
+                </button>
+
+                {showAllFeatures && (
+                  <div className="mt-3 rounded-xl border border-[#262D47] bg-[#0B0E18] divide-y divide-[#262D47] text-xs">
+                    {PLAN_FEATURES.map((feat, idx) => (
+                      <div key={idx} className="p-2.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0 pr-2">
+                          <div className="font-semibold text-[#E4E6F0]">{feat.title}</div>
+                          <div className="text-[10px] text-[#9FA4BC]">{feat.description}</div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 text-center font-mono text-[11px]">
+                          <span className={`w-12 px-1 py-0.5 rounded ${feat.free ? 'bg-[#52B788]/20 text-[#52B788]' : 'text-[#9FA4BC]'}`}>
+                            {feat.free ? 'Free ✓' : '—'}
+                          </span>
+                          <span className="w-12 px-1 py-0.5 rounded bg-[#F4A261]/20 text-[#F4A261] font-bold">
+                            Pro ✓
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-[#9FA4BC]">
+                <span>PWA встановлення на пристрій:</span>
                 <PWAInstallButton darkMode={true} platformMode={platformMode} />
               </div>
             </div>
@@ -392,6 +701,29 @@ actor HealthKitSleepManager {
                 </button>
               </div>
             </div>
+
+            {/* Account Session Logout Section */}
+            {!isGuestUser(currentUser) && onLogout && (
+              <div className="p-4 rounded-2xl bg-[#0F1220] border border-rose-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-bold text-[#E4E6F0] flex items-center gap-2">
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    <span>Вихід із системи</span>
+                  </div>
+                  <div className="text-xs text-[#9FA4BC] mt-0.5">
+                    Вихід з акаунту {currentUser.name} ({currentUser.email}). Ваші налаштування залишаться збереженими.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="min-h-[42px] px-4 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Вийти з акаунту</span>
+                </button>
+              </div>
+            )}
 
             {/* Re-run 5-step Onboarding */}
             <button

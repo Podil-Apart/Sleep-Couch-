@@ -33,7 +33,10 @@ import {
   generateLocalSleepAdvice,
   analyzeWeeklyData,
 } from '../utils/geminiSleepCoach';
+import { PlanTier } from '../utils/subscriptionEngine';
+import { UserAccount } from '../utils/authEngine';
 import { IOSLiveActivity } from './IOSLiveActivity';
+import { SleepJournalSection } from './SleepJournalSection';
 
 interface ScreenTodayProps {
   wakeTime: string;
@@ -48,6 +51,10 @@ interface ScreenTodayProps {
   onTriggerSmartScene: (scene: 'bedtime' | 'morning') => void;
   activeSceneMessage: string | null;
   platformMode?: 'android' | 'ios';
+  planTier?: PlanTier;
+  currentUser: UserAccount;
+  onUpdateCurrentUser: (user: UserAccount) => void;
+  onShowToast?: (title: string, desc: string) => void;
 }
 
 export const ScreenToday: React.FC<ScreenTodayProps> = ({
@@ -63,6 +70,10 @@ export const ScreenToday: React.FC<ScreenTodayProps> = ({
   onTriggerSmartScene,
   activeSceneMessage,
   platformMode = 'android',
+  planTier = 'pro',
+  currentUser,
+  onUpdateCurrentUser,
+  onShowToast,
 }) => {
   // Circle mode: 'countdown' (Час до відбою) or 'summary' (Ви спали 7г 12хв з оцінкою якості)
   const [circleMode, setCircleMode] = useState<'countdown' | 'summary'>('summary');
@@ -424,26 +435,63 @@ export const ScreenToday: React.FC<ScreenTodayProps> = ({
 
           {/* Quick Smart Home Scene Triggers */}
           <div className="pt-4 border-t border-[#262D47] flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-[#9FA4BC]">
-              {activeSceneMessage || 'Сцени Google Home готові до запуску'}
+            <span className="text-xs text-[#9FA4BC] flex items-center gap-1.5">
+              {planTier === 'free' ? (
+                <>
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#F4A261]/20 text-[#F4A261]">PRO</span>
+                  <span>Сцени Google Home & Apple HomeKit доступні у Pro</span>
+                </>
+              ) : (
+                activeSceneMessage || 'Сцени Google Home готові до запуску'
+              )}
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => onTriggerSmartScene('bedtime')}
-                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#1E253D] hover:bg-[#283152] text-xs font-semibold text-[#A390E4] cursor-pointer"
+                onClick={() => {
+                  if (planTier === 'free') {
+                    onNavigateTab('smarthome');
+                  } else {
+                    onTriggerSmartScene('bedtime');
+                  }
+                }}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                  planTier === 'free'
+                    ? 'bg-[#161B2E] text-[#9FA4BC] hover:text-[#E4E6F0] border border-[#262D47]'
+                    : 'bg-[#1E253D] hover:bg-[#283152] text-[#A390E4]'
+                }`}
+                title={planTier === 'free' ? 'Перейти до налаштування гаджетів у Pro' : 'Запустити сцену «Відбій»'}
               >
-                Сцена «Відбій»
+                {planTier === 'free' ? 'Сцена «Відбій» (Pro)' : 'Сцена «Відбій»'}
               </button>
               <button
-                onClick={() => onTriggerSmartScene('morning')}
-                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#1E253D] hover:bg-[#283152] text-xs font-semibold text-[#F4A261] cursor-pointer"
+                onClick={() => {
+                  if (planTier === 'free') {
+                    onNavigateTab('smarthome');
+                  } else {
+                    onTriggerSmartScene('morning');
+                  }
+                }}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                  planTier === 'free'
+                    ? 'bg-[#161B2E] text-[#9FA4BC] hover:text-[#E4E6F0] border border-[#262D47]'
+                    : 'bg-[#1E253D] hover:bg-[#283152] text-[#F4A261]'
+                }`}
+                title={planTier === 'free' ? 'Перейти до налаштування гаджетів у Pro' : 'Запустити сцену «Ранок»'}
               >
-                Сцена «Ранок»
+                {planTier === 'free' ? 'Сцена «Ранок» (Pro)' : 'Сцена «Ранок»'}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Morning Sleep Journal Section (Notes about sleep quality, dreams, stressors stored in profile) */}
+      <SleepJournalSection
+        currentUser={currentUser}
+        onUpdateCurrentUser={onUpdateCurrentUser}
+        onShowToast={onShowToast}
+        platformMode={platformMode}
+      />
 
       {/* Gemini AI Personalized Sleep Coach Advice Card */}
       <section

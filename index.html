@@ -3,6 +3,38 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      /* Ensure window.fetch has both getter and setter for iframe supervisors/extensions */
+      (function() {
+        try {
+          if (typeof window !== 'undefined') {
+            var origFetch = window.fetch ? window.fetch.bind(window) : null;
+            var _fetch = origFetch;
+            try {
+              Object.defineProperty(window, 'fetch', {
+                get: function() { return _fetch; },
+                set: function(val) { _fetch = val; },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (e) {}
+            try {
+              if (typeof Window !== 'undefined' && Window.prototype) {
+                var desc = Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+                if (desc && !desc.set && desc.configurable) {
+                  Object.defineProperty(Window.prototype, 'fetch', {
+                    get: desc.get || function() { return _fetch; },
+                    set: function(val) { _fetch = val; },
+                    configurable: true,
+                    enumerable: desc.enumerable !== false
+                  });
+                }
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>R90 Biometric — Система відновлення чемпіонів</title>
     <meta name="description" content="Біометрична система контролю сну за методом 90-хвилинних циклів Ніка Літлхелса з тренером початку сну, симулятором світанку, протоколом перших 90 хвилин та нагадуваннями про денні паузи відновлення (CRP)." />
     <meta property="og:title" content="R90 Biometric — Система відновлення чемпіонів" />
