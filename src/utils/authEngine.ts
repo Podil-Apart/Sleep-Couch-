@@ -355,6 +355,35 @@ export function loginAccount(
 }
 
 /**
+ * Insert or update an account in local storage (e.g. from Firebase Auth)
+ */
+export function upsertAccount(user: UserAccount): UserAccount {
+  const accounts = getRegisteredAccounts();
+  const index = accounts.findIndex(
+    (a) => a.id === user.id || a.email.toLowerCase() === user.email.toLowerCase()
+  );
+
+  let updatedList: UserAccount[];
+  if (index >= 0) {
+    const existing = accounts[index];
+    const merged: UserAccount = {
+      ...existing,
+      ...user,
+      sleepJournal: user.sleepJournal && user.sleepJournal.length > 0 ? user.sleepJournal : existing.sleepJournal || [],
+    };
+    updatedList = [...accounts];
+    updatedList[index] = merged;
+  } else {
+    updatedList = [user, ...accounts];
+  }
+
+  safeSetItem(STORAGE_ACCOUNTS_KEY, JSON.stringify(updatedList));
+  safeSetItem(STORAGE_CURRENT_USER_KEY, user.id);
+  memoryCurrentUserId = user.id;
+  return user;
+}
+
+/**
  * Switch to a specific account
  */
 export function switchAccount(userId: string): UserAccount | null {

@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with sleep configuration, plan, role and account preferences",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name or display name of the user",
+          "maxLength": 100,
+          "minLength": 2
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 255
+        },
+        "role": {
+          "type": "string",
+          "description": "User role permissions level",
+          "enum": ["admin", "client"]
+        },
+        "plan": {
+          "type": "string",
+          "description": "Subscription tier",
+          "enum": ["free", "pro"]
+        },
+        "chronotype": {
+          "type": "string",
+          "description": "Sleep chronotype preference",
+          "enum": ["morning_lark", "night_owl", "balanced"]
+        },
+        "targetCycles": {
+          "type": "number",
+          "description": "Nightly target 90-minute sleep cycles"
+        },
+        "wakeTime": {
+          "type": "string",
+          "description": "Target morning wake up time HH:MM"
+        },
+        "avatarInitials": {
+          "type": "string",
+          "description": "Two-letter initials for avatar badge"
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Hex color string for user avatar"
+        },
+        "registeredAt": {
+          "type": "string",
+          "description": "Registration date formatted string"
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Email address verified status"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Authentication provider method",
+          "enum": ["email", "apple", "google"]
+        }
+      },
+      "required": ["id", "name", "email", "role", "plan"]
+    },
+    "SleepJournalEntry": {
+      "title": "SleepJournalEntry",
+      "description": "Daily morning sleep reflection, quality rating, dreams, and external stressors",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique entry identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "date": {
+          "type": "string",
+          "description": "Journal entry date (YYYY-MM-DD)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp display string"
+        },
+        "sleepQuality": {
+          "type": "number",
+          "description": "Self-rated sleep score from 1 to 5"
+        },
+        "qualityNotes": {
+          "type": "string",
+          "description": "Notes on how the user slept",
+          "maxLength": 1000
+        },
+        "dreams": {
+          "type": "string",
+          "description": "Dream recollection notes",
+          "maxLength": 1000
+        },
+        "dreamType": {
+          "type": "string",
+          "description": "Category of dream experienced",
+          "enum": ["vivid", "lucid", "nightmare", "neutral", "none"]
+        },
+        "stressors": {
+          "type": "array",
+          "description": "Tags of stressors encountered before sleep"
+        },
+        "stressorsNotes": {
+          "type": "string",
+          "description": "Additional notes on external stressors",
+          "maxLength": 1000
+        },
+        "moodOnWaking": {
+          "type": "string",
+          "description": "Morning mood upon wake up",
+          "enum": ["energized", "calm", "groggy", "tired", "anxious"]
+        },
+        "wakeEase": {
+          "type": "number",
+          "description": "Ease of waking up from 1 to 5"
+        }
+      },
+      "required": ["id", "userId", "date", "sleepQuality", "moodOnWaking"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile records containing account settings, chronotype, role, and subscription"
+    },
+    "/users/{userId}/sleepJournal/{entryId}": {
+      "schema": "SleepJournalEntry",
+      "description": "Subcollection of sleep journal entries recorded by the user each morning"
+    }
+  }
+}

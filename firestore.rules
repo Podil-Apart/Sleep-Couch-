@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'nspshop33@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role', 'plan']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() <= 255 &&
+        data.role in ['admin', 'client'] &&
+        data.plan in ['free', 'pro'];
+    }
+
+    function isValidSleepJournalEntry(data, userId) {
+      return data.keys().hasAll(['id', 'userId', 'date', 'sleepQuality', 'moodOnWaking']) &&
+        data.userId == userId &&
+        data.id is string && data.id.size() <= 128 &&
+        data.date is string && data.date.size() <= 32 &&
+        data.sleepQuality is number && data.sleepQuality >= 1 && data.sleepQuality <= 5 &&
+        data.moodOnWaking is string && data.moodOnWaking.size() <= 32;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUserProfile(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUserProfile(incoming());
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Sleep Journal Subcollection
+      match /sleepJournal/{entryId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidSleepJournalEntry(incoming(), userId);
+        allow update: if isOwner(userId) && isValidSleepJournalEntry(incoming(), userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+  }
+}

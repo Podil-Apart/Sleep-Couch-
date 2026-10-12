@@ -44,6 +44,7 @@ import {
   isAdminAccount,
   logoutAccount,
   isGuestUser,
+  upsertAccount,
 } from '../utils/authEngine';
 import {
   VerificationEmailResult,
@@ -51,6 +52,13 @@ import {
   verifyConfirmationCode,
   getLastSentEmail,
 } from '../utils/emailVerificationService';
+import {
+  registerWithFirebase,
+  loginWithFirebase,
+  resendVerificationEmail,
+} from '../utils/firebase';
+import { GoogleAuthVerificationModal } from './GoogleAuthVerificationModal';
+import { AppleAuthVerificationModal } from './AppleAuthVerificationModal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -86,6 +94,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [lastSentEmail, setLastSentEmail] = useState<VerificationEmailResult | null>(null);
   const [showEmailViewer, setShowEmailViewer] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Google & Apple Verification Modal State
+  const [showGoogleVerifyModal, setShowGoogleVerifyModal] = useState(false);
+  const [showAppleVerifyModal, setShowAppleVerifyModal] = useState(false);
 
   // Form State for Client Login
   const [loginEmail, setLoginEmail] = useState('');
@@ -130,7 +142,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setAccounts(getRegisteredAccounts());
   };
 
-  // Step 1: Client registration submit -> Send verification email
+  // Step 1: Client registration submit -> Send verification email via Firebase Auth service
   const handleInitiateRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -156,26 +168,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const allAccounts = getRegisteredAccounts();
-    const existing = allAccounts.find(
-      (a) => a.email.toLowerCase() === regEmail.trim().toLowerCase()
-    );
-    if (existing) {
-      setErrorMessage(`Акаунт із поштою "${regEmail.trim()}" вже існує. Будь ласка, увійдіть.`);
-      return;
-    }
-
     setIsSendingEmail(true);
+
     try {
+      // 1. Register with Firebase Auth service & trigger verification email
+      const fbResult = await registerWithFirebase({
+        name: regName,
+        email: regEmail,
+        password: regPassword,
+        role: regEmail.toLowerCase() === 'nspshop33@gmail.com' ? 'admin' : 'client',
+        plan: 'free',
+      });
+
+      if (!fbResult.success) {
+        setIsSendingEmail(false);
+        setErrorMessage(fbResult.error || 'Помилка реєстрації через сервіс Firebase Auth.');
+        return;
+      }
+
+      if (fbResult.user) {
+        upsertAccount(fbResult.user);
+        onUserChanged(fbResult.user);
+        refreshAccounts();
+      }
+
+      // Generate local verification code preview for instant applet verification convenience
       const emailResult = await sendVerificationEmail(regEmail, regName);
       setLastSentEmail(emailResult);
+
       setIsSendingEmail(false);
       setRegStep('confirm_email');
       setResendCooldown(60);
-      setSuccessMessage(`Лист із кодом безпеки надіслано на ${regEmail.trim()}`);
-    } catch {
+      setSuccessMessage(
+        `Обліковий запис створено через Firebase Auth! На вашу пошту ${regEmail.trim()} надіслано лист для авторизації.`
+      );
+    } catch (err: unknown) {
       setIsSendingEmail(false);
-      setErrorMessage('Помилка відправки листа підтвердження.');
+      const msg = err instanceof Error ? err.message : 'Помилка з’єднання із сервісом авторизації.';
+      setErrorMessage(msg);
     }
   };
 
@@ -188,6 +218,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const check = verifyConfirmationCode(regEmail, verificationCode);
     if (!check.success) {
       setErrorMessage(check.error || 'Невірний код безпеки.');
+      return;
+    }
+
+    const all = getRegisteredAccounts();
+    const existing = all.find((a) => a.email.toLowerCase() === regEmail.trim().toLowerCase());
+    if (existing) {
+      const updated = { ...existing, emailVerified: true };
+      upsertAccount(updated);
+      onUserChanged(updated);
+      refreshAccounts();
+      setSuccessMessage(`Вітаємо, ${updated.name}! Акаунт успішно підтверджено та активовано.`);
+      setTimeout(() => {
+        onClose();
+      }, 1200);
       return;
     }
 
@@ -232,27 +276,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsSendingEmail(true);
     setErrorMessage(null);
     try {
+      // Trigger Firebase verification resend
+      await resendVerificationEmail();
       const emailResult = await sendVerificationEmail(regEmail, regName);
       setLastSentEmail(emailResult);
       setIsSendingEmail(false);
       setResendCooldown(45);
-      setSuccessMessage('Новий лист із кодом успішно надіслано!');
+      setSuccessMessage('Новий лист авторизації успішно надіслано на вашу пошту!');
       setTimeout(() => setSuccessMessage(null), 3500);
     } catch {
       setIsSendingEmail(false);
-      setErrorMessage('Помилка повторної відправки.');
+      setErrorMessage('Помилка повторної відправки листа авторизації.');
     }
   };
 
-  // Client standard login
-  const handleLogin = (e: React.FormEvent) => {
+  // Client standard login (Firebase Auth with local fallback)
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    // 1. Attempt login with Firebase Authentication service
+    try {
+      const fbLoginRes = await loginWithFirebase(loginEmail, loginPassword);
+      if (fbLoginRes.success && fbLoginRes.user) {
+        upsertAccount(fbLoginRes.user);
+        refreshAccounts();
+        onUserChanged(fbLoginRes.user);
+        setSuccessMessage(`Вітаємо, ${fbLoginRes.user.name}! Авторизація через Firebase виконана.`);
+        setTimeout(() => {
+          onClose();
+        }, 1100);
+        return;
+      }
+    } catch (fbErr) {
+      console.warn('Firebase login attempt:', fbErr);
+    }
+
+    // 2. Fallback to local accounts (e.g. demo/admin accounts)
     const res = loginAccount(loginEmail, loginPassword);
     if (!res.success) {
-      setErrorMessage(res.error || 'Помилка входу');
+      setErrorMessage(res.error || 'Невірний email або пароль.');
       return;
     }
 
@@ -289,39 +353,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }, 1100);
   };
 
-  const handleQuickOAuth = (provider: 'apple' | 'google') => {
+  const handleOpenGoogleVerify = () => {
     setErrorMessage(null);
-    const providerName = provider === 'apple' ? 'Apple ID' : 'Google';
-    const sampleEmail = provider === 'apple' ? 'client.apple@icloud.com' : 'client.google@gmail.com';
-    const sampleName = provider === 'apple' ? 'Клієнт Apple' : 'Клієнт Google';
+    setShowGoogleVerifyModal(true);
+  };
 
-    const res = registerAccount({
-      name: sampleName,
-      email: sampleEmail,
-      password: 'oauth_secure_pass',
-      confirmPassword: 'oauth_secure_pass',
-      provider,
-      chronotype: 'balanced',
-      emailVerified: true,
-      role: 'client',
-      plan: 'free',
-    });
+  const handleOpenAppleVerify = () => {
+    setErrorMessage(null);
+    setShowAppleVerifyModal(true);
+  };
 
-    if (res.success && res.user) {
-      setSuccessMessage(`Успішний вхід клієнта через ${providerName}!`);
-      refreshAccounts();
-      onUserChanged(res.user);
-      setTimeout(() => onClose(), 1100);
-    } else {
-      const loginRes = loginAccount(sampleEmail);
-      if (loginRes.success && loginRes.user) {
-        setSuccessMessage(`Увійшли в акаунт ${providerName}.`);
-        onUserChanged(loginRes.user);
-        setTimeout(() => onClose(), 1100);
-      } else {
-        setErrorMessage(res.error || loginRes.error || 'Помилка авторизації');
-      }
-    }
+  const handleSocialAuthSuccess = (verifiedUser: UserAccount) => {
+    refreshAccounts();
+    onUserChanged(verifiedUser);
+    const providerName = verifiedUser.provider === 'google' ? 'Google' : 'Apple ID';
+    setSuccessMessage(`Вітаємо, ${verifiedUser.name}! Авторизацію та перевірку через ${providerName} успішно підтверджено.`);
+    setTimeout(() => {
+      onClose();
+    }, 1200);
   };
 
   const handleSwitchToAccount = (userId: string) => {
@@ -530,6 +579,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <>
             {regStep === 'form' && (
               <form onSubmit={handleInitiateRegister} className="space-y-4">
+                {/* Firebase Email Authorization Service Status */}
+                <div className="p-3 rounded-2xl bg-[#0F1220] border border-emerald-500/30 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <div>
+                      <span className="text-[#E4E6F0] font-semibold">Сервіс авторизації: </span>
+                      <span className="text-emerald-300 font-medium">Firebase Cloud Auth (Email)</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono">
+                    Підключено
+                  </span>
+                </div>
+
                 <div className="text-xs text-[#9FA4BC]">
                   Створіть свій особистий акаунт клієнта Sleep Coach для розрахунку 90-хвилинних циклів сну R90:
                 </div>
@@ -644,39 +707,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {isSendingEmail ? (
                     <>
                       <Send className="w-4 h-4 animate-pulse text-[#0F1220]" />
-                      <span>Надсилаємо лист із кодом підтвердження...</span>
+                      <span>Реєстрація у Firebase та відправка листа...</span>
                     </>
                   ) : (
                     <>
                       <Mail className="w-4 h-4" />
-                      <span>Зареєструватися та надіслати лист</span>
+                      <span>Зареєструватися через Firebase Auth (Email)</span>
                     </>
                   )}
                 </button>
 
-                {/* Fast 1-click Provider sign-up for clients */}
+                {/* Fast Provider sign-up with Verification */}
                 <div className="pt-2">
                   <div className="relative flex items-center justify-center text-xs text-[#9FA4BC] before:content-[''] before:absolute before:left-0 before:right-0 before:h-[1px] before:bg-[#262D47]">
-                    <span className="relative px-3 bg-[#161B2E]">Або швидка авторизація</span>
+                    <span className="relative px-3 bg-[#161B2E]">Або авторизація з перевіркою</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 mt-3">
                     <button
                       type="button"
-                      onClick={() => handleQuickOAuth('apple')}
-                      className="min-h-[44px] px-3 rounded-xl bg-black/90 hover:bg-black border border-white/20 text-xs font-semibold text-white flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      onClick={handleOpenAppleVerify}
+                      className="min-h-[46px] px-3 rounded-xl bg-black hover:bg-neutral-900 border border-white/20 text-xs font-semibold text-white flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm group"
+                      title="Авторизація та 2FA перевірка через Apple ID"
                     >
-                      <Apple className="w-4 h-4" />
-                      <span>Apple ID</span>
+                      <Apple className="w-4 h-4 fill-white" />
+                      <div className="text-left">
+                        <div className="font-bold leading-tight">Apple ID</div>
+                        <div className="text-[10px] text-white/70 font-normal">2FA перевірка</div>
+                      </div>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleQuickOAuth('google')}
-                      className="min-h-[44px] px-3 rounded-xl bg-[#0F1220] hover:bg-[#1E253D] border border-[#262D47] text-xs font-semibold text-[#E4E6F0] flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      onClick={handleOpenGoogleVerify}
+                      className="min-h-[46px] px-3 rounded-xl bg-[#0F1220] hover:bg-[#1E253D] border border-[#262D47] hover:border-[#4285F4]/60 text-xs font-semibold text-[#E4E6F0] flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm group"
+                      title="Авторизація та перевірка через Google OAuth"
                     >
-                      <Smartphone className="w-4 h-4 text-[#F4A261]" />
-                      <span>Google</span>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <div className="text-left">
+                        <div className="font-bold leading-tight">Google</div>
+                        <div className="text-[10px] text-blue-400 font-normal">Перевірка OAuth</div>
+                      </div>
                     </button>
                   </div>
                 </div>
@@ -803,6 +891,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* TAB 2: CLIENT LOGIN FORM (WITH BIOMETRIC TOUCHID/FACEID) */}
         {tab === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4">
+            {/* Firebase Auth Service Status */}
+            <div className="p-2.5 rounded-xl bg-[#0F1220] border border-emerald-500/30 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[#E4E6F0] font-semibold">Сервіс авторизації:</span>
+                <span className="text-emerald-300 font-medium">Firebase Cloud Auth</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono">
+                Хмарна безпека
+              </span>
+            </div>
+
             {!isGuestUser(currentUser) && (
               <div className="p-3.5 rounded-2xl bg-[#0F1220] border border-[#262D47] flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -912,25 +1012,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
-            {/* Quick 1-click Provider sign-in */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => handleQuickOAuth('apple')}
-                className="min-h-[42px] px-3 rounded-xl bg-black/90 hover:bg-black border border-white/20 text-xs font-semibold text-white flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Apple className="w-4 h-4" />
-                <span>Apple ID</span>
-              </button>
+            {/* Provider sign-in with Verification */}
+            <div className="pt-1">
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleOpenAppleVerify}
+                  className="min-h-[44px] px-3 rounded-xl bg-black hover:bg-neutral-900 border border-white/20 text-xs font-semibold text-white flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm group"
+                  title="Увійти з перевіркою Apple ID"
+                >
+                  <Apple className="w-4 h-4 fill-white" />
+                  <div className="text-left">
+                    <div className="font-bold leading-tight">Apple ID</div>
+                    <div className="text-[10px] text-white/70 font-normal">2FA перевірка</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickOAuth('google')}
-                className="min-h-[42px] px-3 rounded-xl bg-[#0F1220] hover:bg-[#1E253D] border border-[#262D47] text-xs font-semibold text-[#E4E6F0] flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4 text-[#F4A261]" />
-                <span>Google</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleOpenGoogleVerify}
+                  className="min-h-[44px] px-3 rounded-xl bg-[#0F1220] hover:bg-[#1E253D] border border-[#262D47] hover:border-[#4285F4]/60 text-xs font-semibold text-[#E4E6F0] flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm group"
+                  title="Увійти з перевіркою через Google"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-bold leading-tight">Google</div>
+                    <div className="text-[10px] text-blue-400 font-normal">Перевірка OAuth</div>
+                  </div>
+                </button>
+              </div>
             </div>
 
             {/* Footer switcher & Admin Link */}
@@ -1362,6 +1489,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Interactive Google OAuth 2.0 Verification Modal */}
+      <GoogleAuthVerificationModal
+        isOpen={showGoogleVerifyModal}
+        onClose={() => setShowGoogleVerifyModal(false)}
+        onSuccess={handleSocialAuthSuccess}
+        initialEmail={currentUser.email || 'nspshop33@gmail.com'}
+        initialName={currentUser.name !== 'Гість' ? currentUser.name : 'Олександр'}
+      />
+
+      {/* Interactive Apple ID 2FA Verification Modal */}
+      <AppleAuthVerificationModal
+        isOpen={showAppleVerifyModal}
+        onClose={() => setShowAppleVerifyModal(false)}
+        onSuccess={handleSocialAuthSuccess}
+        initialName={currentUser.name !== 'Гість' ? currentUser.name : 'Користувач Apple'}
+        platformMode={platformMode}
+      />
     </div>
   );
 };

@@ -29,6 +29,36 @@ if (typeof window !== 'undefined') {
       }
     } catch {}
   } catch {}
+
+  // Gracefully suppress expected stream cancellations (AbortError / WebSocket closures)
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    if (
+      reason &&
+      (reason.name === 'AbortError' ||
+        reason.message?.includes('aborted') ||
+        reason.message?.includes('AbortError') ||
+        reason.message?.includes('WebSocket closed without opened'))
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    const err = event.error;
+    if (
+      (err &&
+        (err.name === 'AbortError' ||
+          err.message?.includes('aborted') ||
+          err.message?.includes('AbortError'))) ||
+      event.message?.includes('WebSocket closed without opened') ||
+      event.message?.includes('signal is aborted')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
 }
 
 import {StrictMode} from 'react';

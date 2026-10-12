@@ -44,6 +44,7 @@ import {
   logoutAccount,
   isGuestUser,
 } from './utils/authEngine';
+import { logoutFromFirebase } from './utils/firebase';
 import { PlanTier, getStoredPlanTier, saveStoredPlanTier } from './utils/subscriptionEngine';
 import { ScreenToday } from './components/ScreenToday';
 import { ScreenSchedule } from './components/ScreenSchedule';
@@ -141,6 +142,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    logoutFromFirebase().catch(() => {});
     const guestUser = logoutAccount();
     setCurrentUser(guestUser);
     setPlanTier('free');
